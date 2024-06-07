@@ -1,6 +1,7 @@
 # TEMPLATE_UNIFI_CONTROLLER
 Template para zabbix Unifi Controller
 
+Testado com Zabbix 6.0.25
 
 Template criado com API
 
