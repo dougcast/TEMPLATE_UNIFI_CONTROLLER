@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>6.0</version>
+    <date>2024-06-07T11:40:21Z</date>
+    <groups>
+        <group>
+            <uuid>f1978336f4e84d2f8a23796b8a04bfe6</uuid>
+            <name>Templates ZBX</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <uuid>494b66a9c52d4c528f2bd84ee6b10844</uuid>
+            <template>Template UniFi Controller - Sites</template>
+            <name>Template UniFi Controller - Sites</name>
+            <description>V1 Template Unifi Controller 
+Modo de uso por SITE em API.
+
+informe o &quot;site_id&quot; como macro no host e crie um host pra cada site.
+Macro: {$UNIFI_SITENAME}
+
+ex: Macro: {$UNIFI_SITENAME} =&gt; Value: Default =&gt; Description: Site default</description>
+            <groups>
+                <group>
+                    <name>Templates ZBX</name>
+                </group>
+            </groups>
+            <items>
+                <item>
+                    <uuid>5349b001c64043469bd12c458ed4eecb</uuid>
+                    <name>Discover Unifi APs</name>
+                    <type>SCRIPT</type>
+                    <key>unifi.ap</key>
+                    <delay>3m</delay>
+                    <history>7d</history>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <params>var obj = JSON.parse(value);
+var host = obj.host;
+var port = obj.port;
+var user = obj.user;
+var password = obj.password;
+var sitename = obj.sitename;
+
+var login = new HttpRequest();
+login.addHeader('Content-Type', 'application/x-www-form-urlencoded');
+var response = login.post(
+  'https://'+host+':'+port+'/api/login',
+  '{&quot;username&quot;: &quot;'+user+'&quot;, &quot;password&quot;: &quot;'+password+'&quot;}'
+);
+
+if (login.getStatus() !== 200) {
+  throw 'Login failed with status code ' + login.getStatus() + ': ' + response;
+}
+
+try {
+  response = login.get('https://'+host+':'+port+'/api/s/'+sitename+'/stat/device');
+  var devices = JSON.parse(response).data;
+
+  var filteredDevices = devices.map(function(device) {
+    return {
+      site_id: device.site_id,
+      _id: device._id,
+      model: device.model,
+      type: device.type,
+      version: device.version,
+      ip: device.ip,
+      name: device.name,
+      state: device.state,
+      last_seen: device.last_seen,
+      model_in_eol: device.model_in_eol,
+      uptime: device.uptime
+    };
+  });
+
+  return JSON.stringify(filteredDevices);
+}
+catch (error) {
+  throw 'Error parsing JSON response: ' + error;
+}</params>
+                    <parameters>
+                        <parameter>
+                            <name>host</name>
+                            <value>{HOST.CONN}</value>
+                        </parameter>
+                        <parameter>
+                            <name>password</name>
+                            <value>{$UNIFI_PASSWORD}</value>
+                        </parameter>
+                        <parameter>
+                            <name>port</name>
+                            <value>{$UNIFI_PORT}</value>
+                        </parameter>
+                        <parameter>
+                            <name>sitename</name>
+                            <value>{$UNIFI_SITENAME}</value>
+                        </parameter>
+                        <parameter>
+                            <name>user</name>
+                            <value>{$UNIFI_USER}</value>
+                        </parameter>
+                    </parameters>
+                    <tags>
+                        <tag>
+                            <tag>Application</tag>
+                            <value>UniFi-Ap</value>
+                        </tag>
+                    </tags>
+                </item>
+            </items>
+            <discovery_rules>
+                <discovery_rule>
+                    <uuid>6a290becda1f498b9552e50dd7e5f8b0</uuid>
+                    <name>Discover UniFi Site Device</name>
+                    <type>DEPENDENT</type>
+                    <key>unifi.sites.device</key>
+                    <delay>0</delay>
+                    <item_prototypes>
+                        <item_prototype>
+                            <uuid>c1ce96c98c53427d8a6e8cc951bc11c9</uuid>
+                            <name>[{#NAME}] EOL</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.eol.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>Verifica se o AP está em EOL</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].model_in_eol.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>EOL</value>
+                                </tag>
+                            </tags>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <uuid>e252fe2fffcb4d94bd4ade5abdb7e861</uuid>
+                                    <expression>last(/Template UniFi Controller - Sites/unifi.aps.eol.[{#SITEID}.{#AP_ID}])=&quot;true&quot;</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>last(/Template UniFi Controller - Sites/unifi.aps.eol.[{#SITEID}.{#AP_ID}])=&quot;false&quot;</recovery_expression>
+                                    <name>[{#NAME}] EOL</name>
+                                    <event_name>[{#NAME}] em End Of Life</event_name>
+                                    <priority>WARNING</priority>
+                                    <manual_close>YES</manual_close>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>07a1e459288648a5af452dfb7b50c80f</uuid>
+                            <name>[{#NAME}] IP</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.ip.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>IP do AP</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].ip.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>IP</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>aef24b13926f4c989ae30a5260e28afc</uuid>
+                            <name>[{#NAME}] Modelo</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.model.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>Modelo do AP</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].model.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>Model</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>00411a2047574f7986e258e5835ccfe8</uuid>
+                            <name>[{#NAME}]</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.name.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].name.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>Name-AP</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>8a0c21c90927464cbaf1b4bdf8a94ef3</uuid>
+                            <name>[{#NAME}] Estado do AP</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.state.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>30d</trends>
+                            <description>Estado do AP, se está ligado ou desligado
+
+1 Ligado
+0 Desligado</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].state.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>State</value>
+                                </tag>
+                            </tags>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <uuid>ac8a455280a948de86b5deb2aafac7d9</uuid>
+                                    <expression>last(/Template UniFi Controller - Sites/unifi.aps.state.[{#SITEID}.{#AP_ID}])=0</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>last(/Template UniFi Controller - Sites/unifi.aps.state.[{#SITEID}.{#AP_ID}])=1</recovery_expression>
+                                    <name>[{#NAME}] Estado do AP OFFLINE</name>
+                                    <event_name>Ap Offline [{#NAME}]</event_name>
+                                    <priority>DISASTER</priority>
+                                    <description>Ap offline.</description>
+                                    <manual_close>YES</manual_close>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>480ea0eee8d844b3b6a28bd41a756b47</uuid>
+                            <name>[{#NAME}] Tipo</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.type.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>Tipo do AP</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].type.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>Type</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>53302f783e15423382b172120ce859d2</uuid>
+                            <name>[{#NAME}] Uptime</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.uptime.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>30d</trends>
+                            <units>uptime</units>
+                            <description>Uptime do AP</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].uptime.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>Uptime</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <uuid>4463e5035db2466992b3583c5c6c791c</uuid>
+                            <name>[{#NAME}] Versão</name>
+                            <type>DEPENDENT</type>
+                            <key>unifi.aps.version.[{#SITEID}.{#AP_ID}]</key>
+                            <delay>0</delay>
+                            <history>30d</history>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>Versão do AP</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.['_id']=='{#AP_ID}')].version.first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>unifi.ap</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>AP</tag>
+                                    <value>[{#NAME}]</value>
+                                </tag>
+                                <tag>
+                                    <tag>Application</tag>
+                                    <value>Version</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>unifi.ap</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <parameters>
+                                <parameter>var result = [];
+var devices = JSON.parse(value);
+devices.forEach(function(device) {
+  result.push({&quot;{#NAME}&quot;: device.name, &quot;{#AP_ID}&quot;: device._id, &quot;{#SITEID}&quot;: device.site_id});
+});
+return JSON.stringify(result);</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+            </discovery_rules>
+            <macros>
+                <macro>
+                    <macro>{$UNIFI_PASSWORD}</macro>
+                    <value>dlk?EkV}eW=\\TLalQC?W</value>
+                </macro>
+                <macro>
+                    <macro>{$UNIFI_PORT}</macro>
+                    <value>8443</value>
+                </macro>
+                <macro>
+                    <macro>{$UNIFI_UPDATEURL}</macro>
+                    <value>https://fw-update.ubnt.com/api/firmware-latest?filter=eq~~product~~unifi-controller&amp;filter=eq~~channel~~release&amp;filter=eq~~platform~~windows</value>
+                </macro>
+                <macro>
+                    <macro>{$UNIFI_USER}</macro>
+                    <value>zabbix-viewer</value>
+                </macro>
+            </macros>
+        </template>
+    </templates>
+</zabbix_export>
